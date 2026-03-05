@@ -281,6 +281,16 @@
     border-top-right-radius: 4px;
   }
 
+  /* Team result */
+  .msg-bubble.team-result {
+    background: linear-gradient(135deg, var(--gray-100), #EDF2F7);
+    border: 1px solid var(--gray-300);
+    max-width: 100%;
+  }
+  .msg-bubble.team-result strong {
+    color: var(--mint-primary);
+  }
+
   /* Typing indicator */
   .typing {
     display: flex;
@@ -826,7 +836,7 @@ async function callAgentAPI(agentId, userText) {
 
 async function callTeamAPI(userText) {
   if (!canCallAPI()) {
-    return [{ agentId: 'min', text: '잠시만요, 너무 빠르게 보내고 있어요. 조금만 기다려주세요!' }];
+    return '잠시만요, 너무 빠르게 보내고 있어요. 조금만 기다려주세요!';
   }
 
   apiHistories.all.push({ role: 'user', content: userText });
@@ -840,29 +850,18 @@ async function callTeamAPI(userText) {
     });
 
     if (res.status === 429) {
-      return [{ agentId: 'min', text: '요청이 너무 많아요. 10초 후에 다시 말해주세요!' }];
+      return '요청이 너무 많아요. 10초 후에 다시 말해주세요!';
     }
     if (!res.ok) throw new Error(`API error: ${res.status}`);
 
     const data = await res.json();
-    let responses;
+    const text = data.text || '회의 결과를 정리하지 못했습니다.';
 
-    try {
-      const cleaned = data.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      responses = JSON.parse(cleaned);
-    } catch {
-      responses = [{ agent: 'min', text: data.text }];
-    }
-
-    apiHistories.all.push({ role: 'assistant', content: data.text });
-
-    return responses.map(r => ({
-      agentId: r.agent,
-      text: r.text
-    }));
+    apiHistories.all.push({ role: 'assistant', content: text });
+    return text;
   } catch (err) {
     console.error('Team API call failed:', err);
-    return [{ agentId: 'min', text: '연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요.' }];
+    return '연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요.';
   }
 }
 
@@ -905,13 +904,9 @@ function selectAgent(agentId) {
   // Show greeting if no history
   if (chatHistories[agentId].length === 0) {
     if (agentId === 'all') {
-      const greetings = [
-        { agentId: 'z', text: '오~ 단체 채팅이다! 다 같이 얘기하는 거 좋아요!' },
-        { agentId: 'min', text: '안녕하세요. 팀 채팅에 오신 걸 환영합니다. 무엇이든 물어보세요.' },
-        { agentId: 'ero', text: '반가워요! 여기선 다들 각자 스타일대로 대답할 거예요~' },
-      ];
-      greetings.forEach(g => {
-        chatHistories[agentId].push({ type: 'agent', agentId: g.agentId, text: g.text });
+      chatHistories[agentId].push({
+        type: 'agent', agentId: 'all',
+        text: '📋 **팀 회의실**에 오신 걸 환영합니다!\n\n무엇이든 물어보시면 팀원들이 회의를 거쳐 **결과를 정리**해드립니다.'
       });
     } else {
       chatHistories[agentId].push({ type: 'agent', agentId, text: agents[agentId].greeting });
@@ -940,13 +935,22 @@ function createMessageEl(msg) {
   div.className = `message ${msg.type}`;
 
   if (msg.type === 'agent') {
-    const agent = agents[msg.agentId];
-    div.innerHTML = `
-      <div class="msg-avatar" style="background:${agent.color};">${agent.name}</div>
-      <div class="msg-content">
-        <div class="msg-name">${agent.name}</div>
-        <div class="msg-bubble">${escapeHtml(msg.text)}</div>
-      </div>`;
+    if (msg.agentId === 'all') {
+      div.innerHTML = `
+        <div class="msg-avatar" style="background:var(--dark);">ALL</div>
+        <div class="msg-content">
+          <div class="msg-name">Team Meeting</div>
+          <div class="msg-bubble team-result">${formatTeamResult(msg.text)}</div>
+        </div>`;
+    } else {
+      const agent = agents[msg.agentId];
+      div.innerHTML = `
+        <div class="msg-avatar" style="background:${agent.color};">${agent.name}</div>
+        <div class="msg-content">
+          <div class="msg-name">${agent.name}</div>
+          <div class="msg-bubble">${escapeHtml(msg.text)}</div>
+        </div>`;
+    }
   } else {
     div.innerHTML = `
       <div class="msg-avatar">You</div>
@@ -956,6 +960,13 @@ function createMessageEl(msg) {
       </div>`;
   }
   return div;
+}
+
+function formatTeamResult(text) {
+  return escapeHtml(text)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n- /g, '\n• ')
+    .replace(/\n/g, '<br>');
 }
 
 function escapeHtml(text) {
@@ -998,17 +1009,12 @@ async function sendMessage() {
   document.getElementById('sendBtn').disabled = true;
 
   if (currentAgent === 'all') {
-    // Team chat: multiple agents respond via Gemini AI
+    // Team chat: agents discuss internally, return meeting result
     showTyping('min');
-    const responses = await callTeamAPI(text);
+    const teamResult = await callTeamAPI(text);
     removeTyping('min');
-    for (let i = 0; i < responses.length; i++) {
-      const r = responses[i];
-      if (!agents[r.agentId]) r.agentId = 'min'; // fallback
-      chatHistories[currentAgent].push({ type: 'agent', agentId: r.agentId, text: r.text });
-      renderMessages(currentAgent);
-      if (i < responses.length - 1) await delay(300);
-    }
+    chatHistories[currentAgent].push({ type: 'agent', agentId: 'all', text: teamResult });
+    renderMessages(currentAgent);
   } else {
     // Single agent via Gemini AI
     showTyping(currentAgent);
