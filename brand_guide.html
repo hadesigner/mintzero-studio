@@ -33,11 +33,52 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* ─── NAV ─── */
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--gray-100);
+    padding: 0 48px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .nav-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+  }
+  .nav-logo svg { width: 32px; height: 32px; }
+  .nav-logo-text {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--dark);
+  }
+  .nav-logo-text span { color: var(--mint-primary); }
+  .nav-links { display: flex; gap: 32px; }
+  .nav-links a {
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--gray-500);
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--mint-primary); }
+  .nav-links a.active { color: var(--mint-primary); }
+
   /* ─── HERO ─── */
   .hero {
     background: var(--dark);
     color: var(--white);
-    padding: 100px 60px 80px;
+    padding: 130px 60px 80px;
     position: relative;
     overflow: hidden;
   }
@@ -405,6 +446,25 @@
 </style>
 </head>
 <body>
+
+<!-- ═══ NAV ═══ -->
+<nav>
+  <a class="nav-logo" href="/">
+    <svg viewBox="0 0 100 100">
+      <defs><linearGradient id="ng" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#5CE0C0"/><stop offset="100%" style="stop-color:#3DCFAA"/></linearGradient></defs>
+      <path d="M50,5 C72,5 82,5 89,12 C95,18 95,28 95,50 C95,72 95,82 89,88 C82,95 72,95 50,95 C28,95 18,95 12,88 C5,82 5,72 5,50 C5,28 5,18 12,12 C18,5 28,5 50,5 Z" fill="url(#ng)"/>
+      <ellipse cx="50" cy="50" rx="18" ry="22" fill="white" opacity="0.95"/>
+      <path d="M44,38 C44,36 46,35 48,36 L60,44 C63,46 63,54 60,56 L48,64 C46,65 44,64 44,62 Z" fill="url(#ng)"/>
+    </svg>
+    <div class="nav-logo-text">Mint<span>Zero</span></div>
+  </a>
+  <div class="nav-links">
+    <a href="/">Home</a>
+    <a href="chat.html">Chat</a>
+    <a href="brand_guide.html" class="active">Brand Guide</a>
+    <a href="team_agents.html">AI Team</a>
+  </div>
+</nav>
 
 <!-- ═══ HERO ═══ -->
 <header class="hero">
