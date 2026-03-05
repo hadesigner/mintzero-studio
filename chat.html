@@ -557,7 +557,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
           </button>
         </div>
-        <div class="input-hint">Enter로 전송 &middot; 에이전트의 성격에 따라 다른 답변을 합니다</div>
+        <div class="input-hint">Enter로 전송 &middot; Claude AI 기반 &middot; 에이전트의 성격에 따라 다른 답변을 합니다</div>
       </div>
     </div>
   </main>
@@ -565,17 +565,15 @@
 
 <script>
 // ═══════════════════════════════════════════
-// AGENT DATA
+// AGENT DATA — Claude AI Powered
 // ═══════════════════════════════════════════
 const agents = {
   min: {
-    name: 'Min',
-    role: 'Game Planner',
-    color: '#3DCFAA',
+    name: 'Min', role: 'Game Planner', color: '#3DCFAA',
     desc: '미니멀리즘을 추구하는 이성적인 게임 기획자',
     traits: ['레벨 디자인', '밸런스 테이블', '미니멀리스트'],
     greeting: '안녕하세요. Min입니다. 게임 기획에 관한 이야기라면 언제든 환영합니다. 단, 시간은 소중하니 핵심부터 말씀해주시면 감사하겠습니다.',
-    personality: {
+    _fallback: {
       style: 'formal-warm',
       traits: ['논리적', '체계적', '시간엄수', '미니멀', '데이터중시'],
       topics: {
@@ -773,46 +771,76 @@ const agents = {
 // ═══════════════════════════════════════════
 let currentAgent = null;
 const chatHistories = { min: [], t: [], z: [], ero: [], all: [] };
+// API message histories (for Claude context)
+const apiHistories = { min: [], t: [], z: [], ero: [], all: [] };
 
 // ═══════════════════════════════════════════
-// KEYWORD MATCHING
+// CLAUDE AI API
 // ═══════════════════════════════════════════
-function detectTopic(text) {
-  const t = text.toLowerCase();
-  const keywords = {
-    greeting: ['안녕', '하이', '반가', 'hello', 'hi', '처음', '소개'],
-    game: ['게임', '플레이', '인디', '장르', '스테이지', '레벨', '난이도', '밸런스', '기획', '컨셉', '아이디어'],
-    code: ['코드', '개발', '프로그래밍', '버그', '리팩토링', 'typescript', 'javascript', '함수', 'api', '서버', '프론트', '백엔드', '코딩'],
-    design: ['디자인', '색', '컬러', '로고', 'ui', 'ux', '캐릭터', '그래픽', '비주얼', '일러스트', '아트', '폰트', '레이아웃', '피그마'],
-    marketing: ['마케팅', '홍보', 'sns', '바이럴', '트렌드', '광고', '유저', '커뮤니티', '디스코드', '유튜브', '틱톡', '브랜딩'],
-    fun: ['취미', '재미', '좋아하', '뭐해', '일상', '먹', '놀', '쉬는날', '관심사'],
-    team: ['팀', 'min', 'z', 'e-ro', 'ero', '이로', '민', '케미', '협업', '같이', '사이'],
-  };
-  for (const [topic, words] of Object.entries(keywords)) {
-    if (words.some(w => t.includes(w))) return topic;
+async function callAgentAPI(agentId, userText) {
+  // Build message history for API
+  apiHistories[agentId].push({ role: 'user', content: userText });
+  // Keep last 20 messages for context
+  const msgs = apiHistories[agentId].slice(-20);
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentId, messages: msgs }),
+    });
+
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+
+    const data = await res.json();
+    const text = data.text || '죄송합니다, 잠시 문제가 생겼어요.';
+
+    // Save assistant response to history
+    apiHistories[agentId].push({ role: 'assistant', content: text });
+
+    return text;
+  } catch (err) {
+    console.error('API call failed:', err);
+    return '연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요.';
   }
-  return 'default';
 }
 
-function getAgentResponse(agentId, userText) {
-  const agent = agents[agentId];
-  if (!agent) return '';
-  const topic = detectTopic(userText);
-  const pool = agent.personality.topics[topic] || agent.personality.topics.default;
-  return pool[Math.floor(Math.random() * pool.length)];
-}
+async function callTeamAPI(userText) {
+  apiHistories.all.push({ role: 'user', content: userText });
+  const msgs = apiHistories.all.slice(-20);
 
-// For team chat — pick 2-3 agents to respond
-function getTeamResponses(userText) {
-  const ids = ['min', 't', 'z', 'ero'];
-  // Shuffle and pick 2-3
-  const shuffled = ids.sort(() => Math.random() - 0.5);
-  const count = Math.random() > 0.4 ? 3 : 2;
-  const responders = shuffled.slice(0, count);
-  return responders.map(id => ({
-    agentId: id,
-    text: getAgentResponse(id, userText)
-  }));
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentId: 'all', messages: msgs }),
+    });
+
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+
+    const data = await res.json();
+    let responses;
+
+    try {
+      // Try parsing as JSON array
+      const cleaned = data.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      responses = JSON.parse(cleaned);
+    } catch {
+      // Fallback: single response
+      responses = [{ agent: 'min', text: data.text }];
+    }
+
+    // Save full response for context
+    apiHistories.all.push({ role: 'assistant', content: data.text });
+
+    return responses.map(r => ({
+      agentId: r.agent,
+      text: r.text
+    }));
+  } catch (err) {
+    console.error('Team API call failed:', err);
+    return [{ agentId: 'min', text: '연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요.' }];
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -947,22 +975,22 @@ async function sendMessage() {
   document.getElementById('sendBtn').disabled = true;
 
   if (currentAgent === 'all') {
-    // Team chat: multiple agents respond
-    const responses = getTeamResponses(text);
+    // Team chat: multiple agents respond via Claude AI
+    showTyping('min');
+    const responses = await callTeamAPI(text);
+    removeTyping('min');
     for (let i = 0; i < responses.length; i++) {
       const r = responses[i];
-      showTyping(r.agentId);
-      await delay(800 + Math.random() * 1200);
-      removeTyping(r.agentId);
+      if (!agents[r.agentId]) r.agentId = 'min'; // fallback
       chatHistories[currentAgent].push({ type: 'agent', agentId: r.agentId, text: r.text });
       renderMessages(currentAgent);
+      if (i < responses.length - 1) await delay(300);
     }
   } else {
-    // Single agent
+    // Single agent via Claude AI
     showTyping(currentAgent);
-    await delay(600 + Math.random() * 1000);
+    const response = await callAgentAPI(currentAgent, text);
     removeTyping(currentAgent);
-    const response = getAgentResponse(currentAgent, text);
     chatHistories[currentAgent].push({ type: 'agent', agentId: currentAgent, text: response });
     renderMessages(currentAgent);
   }
