@@ -777,16 +777,29 @@ const agents = {
 // ═══════════════════════════════════════════
 let currentAgent = null;
 const chatHistories = { min: [], t: [], z: [], ero: [], all: [] };
-// API message histories (for Claude context)
+// API message histories
 const apiHistories = { min: [], t: [], z: [], ero: [], all: [] };
 
+// Rate limit cooldown (prevent spamming)
+let lastApiCall = 0;
+const MIN_INTERVAL = 2000; // 2 seconds between calls
+
+function canCallAPI() {
+  const now = Date.now();
+  if (now - lastApiCall < MIN_INTERVAL) return false;
+  lastApiCall = now;
+  return true;
+}
+
 // ═══════════════════════════════════════════
-// CLAUDE AI API
+// GEMINI AI API
 // ═══════════════════════════════════════════
 async function callAgentAPI(agentId, userText) {
-  // Build message history for API
+  if (!canCallAPI()) {
+    return '잠시만요, 너무 빠르게 보내고 있어요. 조금만 기다려주세요!';
+  }
+
   apiHistories[agentId].push({ role: 'user', content: userText });
-  // Keep last 20 messages for context
   const msgs = apiHistories[agentId].slice(-20);
 
   try {
@@ -796,14 +809,15 @@ async function callAgentAPI(agentId, userText) {
       body: JSON.stringify({ agentId, messages: msgs }),
     });
 
+    if (res.status === 429) {
+      return '요청이 너무 많아요. 10초 후에 다시 말해주세요!';
+    }
     if (!res.ok) throw new Error(`API error: ${res.status}`);
 
     const data = await res.json();
     const text = data.text || '죄송합니다, 잠시 문제가 생겼어요.';
 
-    // Save assistant response to history
     apiHistories[agentId].push({ role: 'assistant', content: text });
-
     return text;
   } catch (err) {
     console.error('API call failed:', err);
@@ -812,6 +826,10 @@ async function callAgentAPI(agentId, userText) {
 }
 
 async function callTeamAPI(userText) {
+  if (!canCallAPI()) {
+    return [{ agentId: 'min', text: '잠시만요, 너무 빠르게 보내고 있어요. 조금만 기다려주세요!' }];
+  }
+
   apiHistories.all.push({ role: 'user', content: userText });
   const msgs = apiHistories.all.slice(-20);
 
@@ -822,21 +840,21 @@ async function callTeamAPI(userText) {
       body: JSON.stringify({ agentId: 'all', messages: msgs }),
     });
 
+    if (res.status === 429) {
+      return [{ agentId: 'min', text: '요청이 너무 많아요. 10초 후에 다시 말해주세요!' }];
+    }
     if (!res.ok) throw new Error(`API error: ${res.status}`);
 
     const data = await res.json();
     let responses;
 
     try {
-      // Try parsing as JSON array
       const cleaned = data.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       responses = JSON.parse(cleaned);
     } catch {
-      // Fallback: single response
       responses = [{ agent: 'min', text: data.text }];
     }
 
-    // Save full response for context
     apiHistories.all.push({ role: 'assistant', content: data.text });
 
     return responses.map(r => ({

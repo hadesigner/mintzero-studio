@@ -21,36 +21,47 @@ export default async function handler(req, res) {
     parts: [{ text: m.content }]
   }));
 
-  try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPrompt }] },
-          contents: geminiContents,
-          generationConfig: {
-            maxOutputTokens: 512,
-            temperature: 0.9,
-          },
-        }),
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  const payload = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: geminiContents,
+      generationConfig: {
+        maxOutputTokens: 512,
+        temperature: 0.9,
+      },
+    }),
+  };
+
+  // Retry with exponential backoff for 429 rate limits
+  const maxRetries = 3;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, payload);
+
+      if (response.status === 429 && attempt < maxRetries) {
+        const wait = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+        await new Promise(r => setTimeout(r, wait));
+        continue;
       }
-    );
 
-    if (!response.ok) {
-      const err = await response.text();
-      console.error('Gemini API error:', err);
-      return res.status(response.status).json({ error: 'AI API error' });
+      if (!response.ok) {
+        const err = await response.text();
+        console.error('Gemini API error:', err);
+        return res.status(response.status).json({ error: 'AI API error', status: response.status });
+      }
+
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '응답을 생성하지 못했습니다.';
+
+      return res.status(200).json({ text });
+    } catch (err) {
+      if (attempt < maxRetries) continue;
+      console.error('Server error:', err);
+      return res.status(500).json({ error: 'Internal server error' });
     }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '응답을 생성하지 못했습니다.';
-
-    return res.status(200).json({ text });
-  } catch (err) {
-    console.error('Server error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
   }
 }
 
