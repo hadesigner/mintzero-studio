@@ -9,13 +9,105 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'API key not configured' });
 
-  const { agentId, messages } = req.body;
+  const { agentId, messages, subAgents } = req.body;
   if (!agentId || !messages) return res.status(400).json({ error: 'Missing agentId or messages' });
 
-  const systemPrompt = getSystemPrompt(agentId);
-  if (!systemPrompt) return res.status(400).json({ error: 'Unknown agent' });
+  // Team Chat: unchanged single-call meeting mode
+  if (agentId === 'all') {
+    const text = await callGemini(apiKey, 'all', messages, { maxOutputTokens: 512 });
+    return res.status(200).json({ text: text || '응답을 생성하지 못했습니다.' });
+  }
 
-  // Convert messages to Gemini format
+  // Validate agent
+  if (!getBasePrompt(agentId)) {
+    return res.status(400).json({ error: 'Unknown agent' });
+  }
+
+  // === Sub-agent mode (admin panel) ===
+  if (subAgents) {
+    // Pass 1: Main agent call with sub-agent instructions
+    const mainPrompt = getSystemPrompt(agentId, false);
+    const mainText = await callGemini(apiKey, agentId, messages, {
+      systemPrompt: mainPrompt,
+      maxOutputTokens: 768,
+    });
+
+    if (!mainText) {
+      return res.status(500).json({ error: 'AI 응답 생성 실패' });
+    }
+
+    // Pass 2: Parse [ASK:agentId:question] tags
+    const askPattern = /\[ASK:(\w+):(.+?)\]/g;
+    const matches = [...mainText.matchAll(askPattern)];
+
+    if (matches.length === 0) {
+      // No sub-agent calls needed
+      return res.status(200).json({ text: mainText, subAgentCalls: [] });
+    }
+
+    // Limit to 2 sub-agent calls, filter out self-calls and invalid agents
+    const validAgents = ['min', 't', 'z', 'ero'];
+    const limitedMatches = matches
+      .filter(m => m[1] !== agentId && validAgents.includes(m[1]))
+      .slice(0, 2);
+
+    // Call sub-agents in parallel
+    const subCalls = await Promise.all(
+      limitedMatches.map(async (match) => {
+        const subAgentId = match[1];
+        const subQuestion = match[2];
+        const subPrompt = getSystemPrompt(subAgentId, true);
+        const subMessages = [{ role: 'user', content: subQuestion }];
+
+        const subResponse = await callGemini(apiKey, subAgentId, subMessages, {
+          systemPrompt: subPrompt,
+          maxOutputTokens: 256,
+        });
+
+        return {
+          agentId: subAgentId,
+          question: subQuestion,
+          response: subResponse || '(응답을 받지 못했습니다)',
+        };
+      })
+    );
+
+    // Clean [ASK:...] tags from main text
+    let cleanedText = mainText;
+    for (const match of matches) {
+      cleanedText = cleanedText.replace(match[0], '');
+    }
+    cleanedText = cleanedText.replace(/\n{3,}/g, '\n\n').trim();
+
+    return res.status(200).json({
+      text: cleanedText,
+      subAgentCalls: subCalls,
+    });
+  }
+
+  // === Standard mode (public chat, backward compatible) ===
+  const prompt = getSystemPrompt(agentId, false);
+  const text = await callGemini(apiKey, agentId, messages, {
+    systemPrompt: prompt,
+    maxOutputTokens: 512,
+  });
+
+  if (!text) {
+    return res.status(500).json({ error: 'AI 응답 생성 실패' });
+  }
+
+  // Strip any [ASK:] tags that may leak in non-subAgent mode
+  const cleaned = text.replace(/\[ASK:\w+:.+?\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
+  return res.status(200).json({ text: cleaned });
+}
+
+// ═══════════════════════════════════════════
+// GEMINI API HELPER
+// ═══════════════════════════════════════════
+async function callGemini(apiKey, agentId, messages, options = {}) {
+  const systemPrompt = options.systemPrompt || getSystemPrompt(agentId, false);
+  const maxTokens = options.maxOutputTokens || 512;
+
   const geminiContents = messages.slice(-20).map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }]
@@ -28,44 +120,41 @@ export default async function handler(req, res) {
     body: JSON.stringify({
       system_instruction: { parts: [{ text: systemPrompt }] },
       contents: geminiContents,
-      generationConfig: {
-        maxOutputTokens: 512,
-        temperature: 0.9,
-      },
+      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.9 },
     }),
   };
 
-  // Retry with exponential backoff for 429 rate limits
-  const maxRetries = 3;
+  const maxRetries = 2;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await fetch(url, payload);
 
       if (response.status === 429 && attempt < maxRetries) {
-        const wait = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
-        await new Promise(r => setTimeout(r, wait));
+        await new Promise(r => setTimeout(r, Math.pow(2, attempt + 1) * 1000));
         continue;
       }
 
       if (!response.ok) {
         const err = await response.text();
-        console.error('Gemini API error:', err);
-        return res.status(response.status).json({ error: 'AI API error', status: response.status });
+        console.error(`Gemini error (${agentId}):`, err);
+        return null;
       }
 
       const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '응답을 생성하지 못했습니다.';
-
-      return res.status(200).json({ text });
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
     } catch (err) {
       if (attempt < maxRetries) continue;
-      console.error('Server error:', err);
-      return res.status(500).json({ error: 'Internal server error' });
+      console.error(`callGemini error (${agentId}):`, err);
+      return null;
     }
   }
+  return null;
 }
 
-function getSystemPrompt(agentId) {
+// ═══════════════════════════════════════════
+// SYSTEM PROMPTS
+// ═══════════════════════════════════════════
+function getBasePrompt(agentId) {
   const prompts = {
     min: `너는 MintZero Studio의 AI 게임 기획자 "Min"이야.
 
@@ -216,4 +305,45 @@ function getSystemPrompt(agentId) {
   };
 
   return prompts[agentId] || null;
+}
+
+const SUB_AGENT_INSTRUCTIONS = `
+
+## 서브 에이전트 호출
+다른 팀원의 전문 의견이 필요하면 [ASK:에이전트ID:질문] 태그를 사용해.
+
+사용 가능한 팀원:
+- min: 기획/데이터/밸런스
+- t: 개발/코드/성능
+- z: 마케팅/트렌드/유저 심리
+- ero: 디자인/비주얼/서브컬처
+
+예시: [ASK:t:이 게임 로직을 클린하게 구현하려면 어떤 패턴이 좋을까?]
+예시: [ASK:ero:이 컨셉에 어울리는 캐릭터 디자인 방향은?]
+
+호출 규칙:
+- 자기 전문 분야가 아닌 질문이면 해당 팀원에게 물어봐
+- 최대 2명까지 호출 가능 (자기 자신은 호출 불가)
+- 모든 질문에 호출할 필요 없어. 자기 전문이면 직접 답하면 됨
+- [ASK:...] 태그는 답변 끝에 배치해
+- 태그 앞에 먼저 너의 관점에서 답변을 해주고, 추가 의견이 필요한 부분만 호출해`;
+
+const SUB_AGENT_RESPONDER = `
+
+## 참고
+지금은 다른 팀원이 너에게 전문 의견을 구하고 있는 상황이야.
+간결하고 전문적으로 핵심만 답변해줘 (2~3문장).
+[ASK:...] 태그는 절대 사용하지 마.`;
+
+function getSystemPrompt(agentId, isSubAgent = false) {
+  const base = getBasePrompt(agentId);
+  if (!base) return null;
+
+  // Team chat doesn't get sub-agent instructions
+  if (agentId === 'all') return base;
+
+  if (isSubAgent) {
+    return base + SUB_AGENT_RESPONDER;
+  }
+  return base + SUB_AGENT_INSTRUCTIONS;
 }

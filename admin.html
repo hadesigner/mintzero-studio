@@ -368,6 +368,55 @@
     color: var(--mint-primary);
   }
 
+  /* ─── SUB-AGENT CARDS ─── */
+  .sub-agent-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .sub-agent-card {
+    background: var(--gray-100);
+    border-radius: 12px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--gray-300);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .sub-agent-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .sub-agent-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 8px;
+    font-weight: 700;
+    color: var(--white);
+    flex-shrink: 0;
+  }
+  .sub-agent-label {
+    font-size: 11px;
+    color: var(--gray-500);
+    font-weight: 500;
+  }
+  .sub-agent-question {
+    font-style: italic;
+    color: var(--gray-700);
+    margin-bottom: 4px;
+    font-size: 12px;
+  }
+  .sub-agent-response {
+    color: var(--dark);
+  }
+
   .typing {
     display: flex;
     gap: 12px;
@@ -725,7 +774,7 @@ const chatHistories = { min: [], t: [], z: [], ero: [], all: [] };
 const apiHistories = { min: [], t: [], z: [], ero: [], all: [] };
 
 let lastApiCall = 0;
-const MIN_INTERVAL = 2000;
+const MIN_INTERVAL = 4000;
 
 function canCallAPI() {
   const now = Date.now();
@@ -738,7 +787,7 @@ function canCallAPI() {
 // GEMINI AI API
 // ═══════════════════════════════════════════
 async function callAgentAPI(agentId, userText) {
-  if (!canCallAPI()) return '잠시만요, 너무 빠르게 보내고 있어요. 조금만 기다려주세요!';
+  if (!canCallAPI()) return { text: '잠시만요, 너무 빠르게 보내고 있어요. 조금만 기다려주세요!', subAgentCalls: [] };
 
   apiHistories[agentId].push({ role: 'user', content: userText });
   const msgs = apiHistories[agentId].slice(-20);
@@ -747,19 +796,20 @@ async function callAgentAPI(agentId, userText) {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agentId, messages: msgs }),
+      body: JSON.stringify({ agentId, messages: msgs, subAgents: true }),
     });
 
-    if (res.status === 429) return '요청이 너무 많아요. 10초 후에 다시 말해주세요!';
+    if (res.status === 429) return { text: '요청이 너무 많아요. 10초 후에 다시 말해주세요!', subAgentCalls: [] };
     if (!res.ok) throw new Error(`API error: ${res.status}`);
 
     const data = await res.json();
     const text = data.text || '죄송합니다, 잠시 문제가 생겼어요.';
+    const subAgentCalls = data.subAgentCalls || [];
     apiHistories[agentId].push({ role: 'assistant', content: text });
-    return text;
+    return { text, subAgentCalls };
   } catch (err) {
     console.error('API call failed:', err);
-    return '연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요.';
+    return { text: '연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요.', subAgentCalls: [] };
   }
 }
 
@@ -855,11 +905,30 @@ function createMessageEl(msg) {
         </div>`;
     } else {
       const agent = agents[msg.agentId];
+      let subAgentHtml = '';
+      if (msg.subAgentCalls && msg.subAgentCalls.length > 0) {
+        subAgentHtml = '<div class="sub-agent-section">';
+        msg.subAgentCalls.forEach(call => {
+          const subAgent = agents[call.agentId];
+          if (!subAgent) return;
+          subAgentHtml += `
+            <div class="sub-agent-card" style="border-left-color:${subAgent.color};">
+              <div class="sub-agent-header">
+                <div class="sub-agent-avatar" style="background:${subAgent.color};">${subAgent.name}</div>
+                <span class="sub-agent-label">${subAgent.name}의 의견</span>
+              </div>
+              <div class="sub-agent-question">"${escapeHtml(call.question)}"</div>
+              <div class="sub-agent-response">${escapeHtml(call.response)}</div>
+            </div>`;
+        });
+        subAgentHtml += '</div>';
+      }
       div.innerHTML = `
         <div class="msg-avatar" style="background:${agent.color};">${agent.name}</div>
         <div class="msg-content">
           <div class="msg-name">${agent.name}</div>
           <div class="msg-bubble">${escapeHtml(msg.text)}</div>
+          ${subAgentHtml}
         </div>`;
     }
   } else {
@@ -924,9 +993,14 @@ async function sendMessage() {
     renderMessages(currentAgent);
   } else {
     showTyping(currentAgent);
-    const response = await callAgentAPI(currentAgent, text);
+    const result = await callAgentAPI(currentAgent, text);
     removeTyping(currentAgent);
-    chatHistories[currentAgent].push({ type: 'agent', agentId: currentAgent, text: response });
+    chatHistories[currentAgent].push({
+      type: 'agent',
+      agentId: currentAgent,
+      text: result.text,
+      subAgentCalls: result.subAgentCalls
+    });
     renderMessages(currentAgent);
   }
 
