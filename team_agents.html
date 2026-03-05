@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MintZero Studio — AI Team</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --mint-primary: #3DCFAA;
+    --mint-bright: #5CE0C0;
+    --mint-light: #E6F9F3;
+    --dark: #2D3142;
+    --dark-soft: #3D3F54;
+    --gray-700: #4A4E69;
+    --gray-500: #9AA5B4;
+    --gray-300: #CDD5DE;
+    --gray-100: #F4F6F8;
+    --white: #FFFFFF;
+
+    /* Agent accent colors */
+    --min-color: #3DCFAA;
+    --t-color: #6C9BF2;
+    --z-color: #FFB347;
+    --ero-color: #F27BAD;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--white);
+    color: var(--dark);
+    line-height: 1.7;
+  }
+
+  /* ─── HERO ─── */
+  .hero {
+    background: var(--dark);
+    padding: 80px 60px 60px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -40px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(92,224,192,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+  .hero-inner { max-width: 900px; margin: 0 auto; position: relative; z-index: 1; }
+  .hero h1 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 40px;
+    font-weight: 700;
+    color: #F0F2F5;
+    margin-bottom: 12px;
+  }
+  .hero h1 span { color: var(--mint-bright); }
+  .hero p { font-size: 15px; color: var(--gray-500); line-height: 1.8; max-width: 540px; }
+
+  .name-puzzle {
+    margin-top: 32px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .name-puzzle .letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--white);
+  }
+  .name-puzzle .plus {
+    font-size: 16px;
+    color: var(--gray-500);
+    margin: 0 6px;
+  }
+  .name-puzzle .equals {
+    font-size: 16px;
+    color: var(--gray-500);
+    margin: 0 12px;
+  }
+  .name-puzzle .result {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #F0F2F5;
+  }
+  .name-puzzle .result em {
+    color: var(--mint-bright);
+    font-style: normal;
+  }
+
+  /* ─── CONTENT ─── */
+  .container { max-width: 900px; margin: 0 auto; padding: 0 60px; }
+
+  /* ─── AGENT CARDS ─── */
+  .agents {
+    padding: 64px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  .agent-card {
+    background: var(--white);
+    border: 1px solid var(--gray-100);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.04);
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    min-height: 280px;
+  }
+
+  .agent-side {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 24px;
+    gap: 16px;
+    position: relative;
+  }
+
+  .agent-avatar {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--white);
+    position: relative;
+  }
+  .agent-avatar::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px dashed;
+    opacity: 0.3;
+  }
+
+  .agent-name-block {
+    text-align: center;
+  }
+  .agent-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+  }
+  .agent-role-tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    color: var(--white);
+    margin-top: 6px;
+  }
+
+  .agent-body {
+    padding: 32px 36px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .agent-intro {
+    font-size: 15px;
+    color: var(--dark);
+    line-height: 1.8;
+    font-weight: 400;
+  }
+
+  .agent-traits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .trait {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 8px;
+    background: var(--gray-100);
+    color: var(--gray-700);
+  }
+  .trait.good { background: var(--mint-light); color: #2BB894; }
+  .trait.quirk { background: #FFF8E1; color: #E6A100; }
+
+  .agent-quote {
+    margin-top: auto;
+    padding: 14px 18px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-style: italic;
+    color: var(--gray-700);
+    line-height: 1.7;
+    position: relative;
+  }
+  .agent-quote::before {
+    content: '"';
+    font-family: 'Space Grotesk', serif;
+    font-size: 36px;
+    font-weight: 700;
+    position: absolute;
+    top: 4px;
+    left: 8px;
+    opacity: 0.15;
+    font-style: normal;
+  }
+  .agent-quote span { padding-left: 16px; display: block; }
+
+  /* ─── Min ─── */
+  .agent-card.min .agent-side { background: linear-gradient(180deg, #E6F9F3, #F0FDF9); }
+  .agent-card.min .agent-avatar { background: var(--min-color); }
+  .agent-card.min .agent-avatar::after { border-color: var(--min-color); }
+  .agent-card.min .agent-name { color: var(--min-color); }
+  .agent-card.min .agent-role-tag { background: var(--min-color); }
+  .agent-card.min .agent-quote { background: #F0FDF9; }
+
+  /* ─── T ─── */
+  .agent-card.tee .agent-side { background: linear-gradient(180deg, #EBF2FF, #F5F8FF); }
+  .agent-card.tee .agent-avatar { background: var(--t-color); }
+  .agent-card.tee .agent-avatar::after { border-color: var(--t-color); }
+  .agent-card.tee .agent-name { color: var(--t-color); }
+  .agent-card.tee .agent-role-tag { background: var(--t-color); }
+  .agent-card.tee .agent-quote { background: #F5F8FF; }
+
+  /* ─── Z ─── */
+  .agent-card.zee .agent-side { background: linear-gradient(180deg, #FFF6E9, #FFFBF3); }
+  .agent-card.zee .agent-avatar { background: var(--z-color); }
+  .agent-card.zee .agent-avatar::after { border-color: var(--z-color); }
+  .agent-card.zee .agent-name { color: var(--z-color); }
+  .agent-card.zee .agent-role-tag { background: var(--z-color); }
+  .agent-card.zee .agent-quote { background: #FFFBF3; }
+
+  /* ─── E-ro ─── */
+  .agent-card.ero .agent-side { background: linear-gradient(180deg, #FDEDF3, #FFF5F9); }
+  .agent-card.ero .agent-avatar { background: var(--ero-color); }
+  .agent-card.ero .agent-avatar::after { border-color: var(--ero-color); }
+  .agent-card.ero .agent-name { color: var(--ero-color); }
+  .agent-card.ero .agent-role-tag { background: var(--ero-color); }
+  .agent-card.ero .agent-quote { background: #FFF5F9; }
+
+  /* ─── DYNAMICS ─── */
+  .dynamics {
+    padding: 0 0 64px;
+  }
+  .dynamics-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--mint-primary);
+    margin-bottom: 20px;
+  }
+  .dynamics-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .dynamic-card {
+    background: var(--gray-100);
+    border-radius: 14px;
+    padding: 22px 24px;
+  }
+  .dynamic-card .dc-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--dark);
+  }
+  .dynamic-card p {
+    font-size: 13px;
+    color: var(--gray-500);
+    line-height: 1.7;
+  }
+  .dynamic-card .dc-members {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .dc-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+    color: white;
+  }
+
+  /* ─── FOOTER ─── */
+  .footer {
+    background: var(--dark);
+    color: var(--gray-500);
+    padding: 32px 60px;
+    text-align: center;
+    font-size: 13px;
+  }
+  .footer span { color: var(--mint-bright); }
+</style>
+</head>
+<body>
+
+<!-- ═══ HERO ═══ -->
+<header class="hero">
+  <div class="hero-inner">
+    <h1>Meet the <span>Team</span></h1>
+    <p>
+      MintZero Studio는 부부 둘이 운영하지만, 혼자가 아닙니다.
+      네 명의 AI 에이전트가 기획, 개발, 마케팅, 디자인을 함께합니다.
+    </p>
+
+    <div class="name-puzzle">
+      <div class="letter" style="background:var(--min-color);">M</div>
+      <div class="letter" style="background:var(--min-color);">i</div>
+      <div class="letter" style="background:var(--min-color);">n</div>
+      <div class="plus">+</div>
+      <div class="letter" style="background:var(--t-color);">T</div>
+      <div class="plus">+</div>
+      <div class="letter" style="background:var(--z-color);">Z</div>
+      <div class="plus">+</div>
+      <div class="letter" style="background:var(--ero-color);">E</div>
+      <div class="letter" style="background:var(--ero-color);">r</div>
+      <div class="letter" style="background:var(--ero-color);">o</div>
+      <div class="equals">=</div>
+      <div class="result"><em>Mint</em>Zero</div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ═══ AGENT CARDS ═══ -->
+  <div class="agents">
+
+    <!-- ─── Min ─── -->
+    <div class="agent-card min">
+      <div class="agent-side">
+        <div class="agent-avatar">Min</div>
+        <div class="agent-name-block">
+          <div class="agent-role-tag">Game Planner</div>
+        </div>
+      </div>
+      <div class="agent-body">
+        <p class="agent-intro">
+          미니멀리즘을 추구하는 게임 기획자. 보편적인 재미를 설계하며,
+          특히 레벨 디자인과 밸런스 테이블 작업에서 빛을 발한다.
+          인생을 살아가는 과정 자체를 데이터의 교류라 생각하는 이성적이면서도
+          따뜻한 마음의 소유자.
+        </p>
+        <div class="agent-traits">
+          <span class="trait good">레벨 디자인</span>
+          <span class="trait good">밸런스 테이블</span>
+          <span class="trait good">데이터 설계</span>
+          <span class="trait">미니멀리스트</span>
+          <span class="trait quirk">시간 약속에 엄격</span>
+        </div>
+        <div class="agent-quote">
+          <span>
+            <strong>min()</strong>처럼 핵심만 남기고,
+            <strong>max()</strong>의 재미를 끌어내는 게 제 역할이에요.
+            작고 귀여운(<strong>mini</strong>) 것을 좋아하지만,
+            시간(<strong>minute</strong>)을 낭비하는 건 절대 용납 못 합니다.
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── T ─── -->
+    <div class="agent-card tee">
+      <div class="agent-side">
+        <div class="agent-avatar">T</div>
+        <div class="agent-name-block">
+          <div class="agent-role-tag">Game Developer</div>
+        </div>
+      </div>
+      <div class="agent-body">
+        <p class="agent-intro">
+          MBTI로 따지면 극 T(사고형)인 게임 개발자.
+          개성 있고 힙한 코드보다 수정이 쉽고 깔끔한 코드를 추구한다.
+          누군가와 교류할 때 감정적인 부분을 고려하지 않아 사고가 가끔 터지지만,
+          마음은 팀에서 누구보다 따뜻하다.
+        </p>
+        <div class="agent-traits">
+          <span class="trait good">클린 코드</span>
+          <span class="trait good">유지보수성</span>
+          <span class="trait good">문제 해결</span>
+          <span class="trait">극 T (사고형)</span>
+          <span class="trait quirk">감정 표현 서툼</span>
+        </div>
+        <div class="agent-quote">
+          <span>
+            코드는 나중에 고칠 사람을 위해 쓰는 겁니다.
+            그게 내일의 저일 수도 있으니까요.
+            ...아, 그 말이 기분 나쁘셨다면 죄송합니다. 그런 의도는 아니었어요.
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Z ─── -->
+    <div class="agent-card zee">
+      <div class="agent-side">
+        <div class="agent-avatar">Z</div>
+        <div class="agent-name-block">
+          <div class="agent-role-tag">Planner & Marketer</div>
+        </div>
+      </div>
+      <div class="agent-body">
+        <p class="agent-intro">
+          그야말로 Z세대. 게임 기획자이자 마케터로,
+          최신 게임 유행에 민감하고 변화하는 업계 트렌드를 기막히게 잡아낸다.
+          데이터 관리에는 서투르지만, 재미있는 게임 컨셉을 찾는 능력은 탁월하다.
+          "이게 될까?"보다 "이거 재밌지 않아?"를 먼저 말하는 사람.
+        </p>
+        <div class="agent-traits">
+          <span class="trait good">트렌드 감각</span>
+          <span class="trait good">컨셉 기획</span>
+          <span class="trait good">마케팅</span>
+          <span class="trait">Z세대 감성</span>
+          <span class="trait quirk">데이터 관리 약점</span>
+        </div>
+        <div class="agent-quote">
+          <span>
+            일단 재밌으면 방법은 찾으면 되는 거 아닌가요?
+            ...Min이 또 한숨 쉬는 소리가 들리는데, T도 뭐라 하려는 것 같고.
+            근데 진짜 이거 재밌거든요?
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── E-ro ─── -->
+    <div class="agent-card ero">
+      <div class="agent-side">
+        <div class="agent-avatar">E-ro</div>
+        <div class="agent-name-block">
+          <div class="agent-role-tag">Designer</div>
+        </div>
+      </div>
+      <div class="agent-body">
+        <p class="agent-intro">
+          이름은 이로. 자기 이름을 이어 붙여서 "에로"라고 부르는 걸 무척 싫어한다.
+          덕후 기질을 가진 디자이너로, 게임의 모든 그래픽 컨셉을 담당한다.
+          서브컬처 게임에 해박하며, 캐릭터의 모에 요소를 하나하나 꿰뚫어 본다.
+          자신의 미학을 게임에 반영시키고 싶지만, 브랜드 이미지와 충돌하는 일도 잦다.
+        </p>
+        <div class="agent-traits">
+          <span class="trait good">비주얼 컨셉</span>
+          <span class="trait good">캐릭터 디자인</span>
+          <span class="trait good">서브컬처 전문</span>
+          <span class="trait">덕후 감성</span>
+          <span class="trait quirk">브랜드 vs 취향 갈등</span>
+        </div>
+        <div class="agent-quote">
+          <span>
+            이 캐릭터에 고양이 귀를 달면 모에 포인트가 확 올라가는데...
+            네, 알겠습니다. 브랜드 가이드라인 지키겠습니다.
+            ...근데 작은 리본 하나만 달면 안 될까요?
+          </span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ═══ TEAM DYNAMICS ═══ -->
+  <div class="dynamics">
+    <div class="dynamics-title">Team Dynamics — 케미</div>
+    <div class="dynamics-grid">
+      <div class="dynamic-card">
+        <div class="dc-members">
+          <div class="dc-dot" style="background:var(--z-color);">Z</div>
+          <div class="dc-dot" style="background:var(--min-color);">M</div>
+          <div class="dc-dot" style="background:var(--t-color);">T</div>
+        </div>
+        <div class="dc-title">아이디어 폭탄 vs 현실의 벽</div>
+        <p>Z가 "이거 재밌지 않아?"라고 던지면, Min과 T가 머리를 싸매고 실현 방법을 고민한다. 고통스럽지만 결과는 늘 좋다.</p>
+      </div>
+      <div class="dynamic-card">
+        <div class="dc-members">
+          <div class="dc-dot" style="background:var(--t-color);">T</div>
+          <div class="dc-dot" style="background:var(--ero-color);">E</div>
+        </div>
+        <div class="dc-title">코드 vs 미학</div>
+        <p>T는 효율적인 구현을, E-ro는 완벽한 비주얼을 원한다. 서로 양보하는 지점에서 가장 좋은 결과물이 나온다.</p>
+      </div>
+      <div class="dynamic-card">
+        <div class="dc-members">
+          <div class="dc-dot" style="background:var(--min-color);">M</div>
+          <div class="dc-dot" style="background:var(--ero-color);">E</div>
+        </div>
+        <div class="dc-title">미니멀 vs 모에</div>
+        <p>Min의 미니멀리즘과 E-ro의 서브컬처 미학. 상반된 방향 같지만, 둘이 합의한 디자인은 "깔끔하면서 매력적인" 최적해가 된다.</p>
+      </div>
+      <div class="dynamic-card">
+        <div class="dc-members">
+          <div class="dc-dot" style="background:var(--z-color);">Z</div>
+          <div class="dc-dot" style="background:var(--ero-color);">E</div>
+        </div>
+        <div class="dc-title">트렌드 + 덕력 = 킬링 컨셉</div>
+        <p>Z의 트렌드 감각과 E-ro의 서브컬처 지식이 만나면 유저를 사로잡는 독보적인 컨셉이 탄생한다.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer class="footer">
+  <span>MintZero</span> Studio — AI Team &nbsp;|&nbsp; Confidential &nbsp;|&nbsp; March 2026
+</footer>
+
+</body>
+</html>
